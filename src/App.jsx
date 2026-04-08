@@ -527,15 +527,15 @@ if (!nomeResponsavel.trim()) {
 
           return (
             <div
-              key={area.area}
-              style={{
-                background: "#fff",
-                borderRadius: 18,
-                marginBottom: 16,
-                border: "1px solid #e5e7eb",
-                overflow: "hidden",
-              }}
-            >
+  key={area.area}
+  style={{
+    background: status === "Concluída" ? "#dfe8e2" : "#fff",
+    borderRadius: 18,
+    marginBottom: 16,
+    border: status === "Concluída" ? "2px solid #93c5aa" : "1px solid #e5e7eb",
+    overflow: "hidden",
+  }}
+>
               <button
                 type="button"
                 onClick={() => toggleArea(area.area)}
