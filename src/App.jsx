@@ -324,68 +324,6 @@ if (!nomeResponsavel.trim()) {
     return null;
   }
 
-  async function salvarItem(areaName, itemName) {
-    if (!responsavelConfirmado.trim()) {
-  alert("Selecione o colaborador.");
-  return;
-}
-
-    const area = areas.find((a) => a.area === areaName);
-    if (!area) return;
-
-    const item = area.itens.find((i) => i.item === itemName);
-    if (!item) return;
-
-    const erroValidacao = validarItem(item);
-    if (erroValidacao) {
-      alert(erroValidacao);
-      return;
-    }
-
-    const chave = `${areaName}__${itemName}`;
-
-    try {
-      setSalvandoChave(chave);
-
-      const response = await fetch(WEB_APP_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8",
-        },
-        body: JSON.stringify({
-          action: "saveItem",
-          data: dataChecklist,
-          responsavel: responsavelConfirmado,
-          resposta: {
-            area: areaName,
-            item: item.item,
-            conforme: item.resposta.conforme,
-            observacao: item.resposta.observacao || "",
-            foto: item.resposta.fotoBase64
-              ? {
-                  mimeType: item.resposta.fotoMimeType || "image/jpeg",
-                  base64: item.resposta.fotoBase64,
-                }
-              : null,
-          },
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!result.ok) {
-        throw new Error(result.error || "Erro ao salvar item.");
-      }
-
-      await carregarChecklist(responsavelConfirmado);
-
-    } catch (error) {
-      alert("Erro ao salvar item: " + error.message);
-    } finally {
-      setSalvandoChave("");
-    }
-  }
-
   async function salvarArea(areaName) {
     if (!responsavelConfirmado.trim()) {
   alert("Selecione o colaborador.");
@@ -636,8 +574,6 @@ if (!nomeResponsavel.trim()) {
                   {area.itens.map((item, index) => {
                     const fotoObrigatoriaAgora = isFotoObrigatoriaAgora(item);
                     const observacaoObrigatoria = isObservacaoObrigatoria(item);
-                    const chaveItem = `${area.area}__${item.item}`;
-                    const estaSalvando = salvandoChave === chaveItem;
 
                     return (
                       <div
@@ -645,7 +581,7 @@ if (!nomeResponsavel.trim()) {
   style={{
     padding: 14,
     marginBottom: 14,
-    border: "1px solid #f1f5f9",
+    border: "2px solid #cbd5e1",
     borderRadius: 14,
     background: "#ffffff",
     boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
@@ -840,24 +776,6 @@ if (!nomeResponsavel.trim()) {
                             }}
                           />
                         ) : null}
-
-                        <button
-                          type="button"
-                          onClick={() => salvarItem(area.area, item.item)}
-                          disabled={estaSalvando}
-                          style={{
-                            width: "100%",
-                            minHeight: 46,
-                            border: "none",
-                            borderRadius: 12,
-                            background: "#0f172a",
-                            color: "#fff",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          {estaSalvando ? "Salvando..." : "Salvar item"}
-                        </button>
                       </div>
                     );
                   })}
