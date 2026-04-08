@@ -4,14 +4,12 @@ body {
   background: #f5f5f5;
 }
 
-button {
-  margin-right: 8px;
-  padding: 8px 12px;
-  border: 1px solid #ccc;
-  background: white;
-  cursor: pointer;
+* {
+  box-sizing: border-box;
 }
 
-input {
-  box-sizing: border-box;
+button,
+input,
+textarea {
+  font-family: inherit;
 }
