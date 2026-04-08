@@ -631,7 +631,7 @@ if (!nomeResponsavel.trim()) {
               </button>
 
               {aberta && (
-                <div style={{ padding: 16 }}>
+  <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 2 }}>
                   {area.itens.map((item, index) => {
                     const fotoObrigatoriaAgora = isFotoObrigatoriaAgora(item);
                     const observacaoObrigatoria = isObservacaoObrigatoria(item);
@@ -644,9 +644,9 @@ if (!nomeResponsavel.trim()) {
   style={{
     padding: 14,
     marginBottom: 14,
-    border: "1px solid #e2e8f0",
+    border: "1px solid #f1f5f9",
     borderRadius: 14,
-    background: "#fcfcfd",
+    background: "#ffffff",
     boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
   }}
 >
