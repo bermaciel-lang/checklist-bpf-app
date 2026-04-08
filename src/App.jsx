@@ -193,11 +193,11 @@ if (!nomeResponsavel.trim()) {
     setResponsavel(nomeResponsavel.trim());
 
     if (areasTratadas.length > 0) {
-      setAreaAberta(areasTratadas[0].area);
-    } else {
-      setAreaAberta("");
-      alert("O backend respondeu, mas não retornou nenhuma área para hoje.");
-    }
+  setAreaAberta("");
+} else {
+  setAreaAberta("");
+  alert("O backend respondeu, mas não retornou nenhuma área para hoje.");
+}
   } catch (error) {
     console.error(error);
     setErro(error.message);
