@@ -509,6 +509,7 @@ if (!nomeResponsavel.trim()) {
 
 <select
   value={responsavel}
+  disabled={loading}
   onChange={(e) => {
     const nome = e.target.value;
     setResponsavel(nome);
