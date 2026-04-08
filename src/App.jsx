@@ -326,9 +326,9 @@ if (!nomeResponsavel.trim()) {
 
   async function salvarItem(areaName, itemName) {
     if (!responsavelConfirmado.trim()) {
-      alert("Primeiro clique em Carregar checklist.");
-      return;
-    }
+  alert("Selecione o colaborador.");
+  return;
+}
 
     const area = areas.find((a) => a.area === areaName);
     if (!area) return;
@@ -388,9 +388,9 @@ if (!nomeResponsavel.trim()) {
 
   async function salvarArea(areaName) {
     if (!responsavelConfirmado.trim()) {
-      alert("Primeiro clique em Carregar checklist.");
-      return;
-    }
+  alert("Selecione o colaborador.");
+  return;
+}
 
     const area = areas.find((a) => a.area === areaName);
     if (!area) return;
@@ -509,7 +509,18 @@ if (!nomeResponsavel.trim()) {
 
 <select
   value={responsavel}
-  onChange={(e) => setResponsavel(e.target.value)}
+  onChange={(e) => {
+    const nome = e.target.value;
+    setResponsavel(nome);
+
+    if (nome) {
+      carregarChecklist(nome);
+    } else {
+      setResponsavelConfirmado("");
+      setAreas([]);
+      setAreaAberta("");
+    }
+  }}
   style={{
     width: "100%",
     padding: 12,
@@ -528,23 +539,7 @@ if (!nomeResponsavel.trim()) {
   ))}
 </select>
 
-          <button
-            type="button"
-            onClick={() => carregarChecklist(responsavel)}
-            disabled={loading}
-            style={{
-              width: "100%",
-              minHeight: 48,
-              border: "none",
-              borderRadius: 12,
-              background: "#0f172a",
-              color: "#fff",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            {loading ? "Carregando..." : "Carregar checklist"}
-          </button>
+
         </div>
 
   {responsavelConfirmado ? (
