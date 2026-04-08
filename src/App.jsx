@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from "react";
 const WEB_APP_URL =
   "https://script.google.com/macros/s/AKfycbw88pz4BJNUwwQJQ95yRcBjPiqjeIZFQMrRqR3o6T95eu5G1_1w1Juh8hd821QztneA/exec";
 
+const STORAGE_COLABORADOR_KEY = "checklist_bpf_colaborador";
+
 function todayInputValue() {
   const d = new Date();
   const year = d.getFullYear();
@@ -117,9 +119,23 @@ export default function App() {
   }
 }
 
-  useEffect(() => {
+useEffect(() => {
   carregarResponsaveis();
 }, []);
+
+useEffect(() => {
+  if (responsaveis.length === 0) return;
+
+  const colaboradorSalvo = localStorage.getItem(STORAGE_COLABORADOR_KEY) || "";
+
+  if (!colaboradorSalvo) return;
+
+  const existeNaLista = responsaveis.includes(colaboradorSalvo);
+  if (!existeNaLista) return;
+
+  setResponsavel(colaboradorSalvo);
+  carregarChecklist(colaboradorSalvo);
+}, [responsaveis]);
 
 async function carregarChecklist(nomeResponsavel) {
 if (!nomeResponsavel.trim()) {
@@ -448,18 +464,20 @@ if (!nomeResponsavel.trim()) {
 <select
   value={responsavel}
   disabled={loading}
-  onChange={(e) => {
-    const nome = e.target.value;
-    setResponsavel(nome);
+onChange={(e) => {
+  const nome = e.target.value;
+  setResponsavel(nome);
 
-    if (nome) {
-      carregarChecklist(nome);
-    } else {
-      setResponsavelConfirmado("");
-      setAreas([]);
-      setAreaAberta("");
-    }
-  }}
+  if (nome) {
+    localStorage.setItem(STORAGE_COLABORADOR_KEY, nome);
+    carregarChecklist(nome);
+  } else {
+    localStorage.removeItem(STORAGE_COLABORADOR_KEY);
+    setResponsavelConfirmado("");
+    setAreas([]);
+    setAreaAberta("");
+  }
+}}
   style={{
     width: "100%",
     padding: 12,
