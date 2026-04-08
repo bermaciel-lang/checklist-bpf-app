@@ -1,75 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 const WEB_APP_URL =
   "https://script.google.com/macros/s/AKfycbw88pz4BJNUwwQJQ95yRcBjPiqjeIZFQMrRqR3o6T95eu5G1_1w1Juh8hd821QztneA/exec";
-
-const SECTIONS = [
-  {
-    area: "SALA DE FRACIONAMENTO",
-    items: [
-      "Porta fechada",
-      "Lixeiras vazias e limpas.",
-      "Balanças limpas e em bom estado",
-      "Bancada e utensílios limpos e em bom estado",
-      "Preenchimento adequado da folha de pesagem",
-    ],
-  },
-  {
-    area: "CÂMARA FRIA",
-    items: [
-      "Temperatura adequada (max 7°C)",
-      "Caixas plásticas identificadas",
-      "Organização",
-      "Pallets somente de plástico",
-    ],
-  },
-  {
-    area: "SALA DE HIGIENIZADOS",
-    items: [
-      "Uniforme limpo e completo",
-      "Uso de touca e luva",
-      "Bancadas, superfícies e utensílios limpos",
-      "Lixeiras vazias com tampa e pedal",
-      "Temperatura da sala",
-      "Ausência de pragas ou vestígios",
-      "Preenchimento adequado da folha de pesagem",
-      "Organização",
-    ],
-  },
-  {
-    area: "ESTOQUE HIGIENIZADOS",
-    items: [
-      "Temperatura adequada das geladeiras (max 4°C)",
-      "Itens devidamente identificados (fab/val/qtde)",
-      "Sistema PVPS sendo aplicado",
-      "Separação por tipo de produto",
-      "Geladeira limpa",
-    ],
-  },
-];
-
-function buildInitialItems() {
-  const list = [];
-  let id = 1;
-
-  SECTIONS.forEach((section) => {
-    section.items.forEach((item) => {
-      list.push({
-        id: id++,
-        area: section.area,
-        item,
-        status: "",
-        observacao: "",
-        fotoBase64: "",
-        fotoMimeType: "",
-        fotoPreview: "",
-        open: false,
-      });
-    });
-  });
-
-  return list;
-}
 
 function formatLongDate(date = new Date()) {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -97,11 +29,60 @@ function fileToBase64(file) {
   });
 }
 
+function buildItemsFromTemplate(template) {
+  return template.map((row, index) => ({
+    id: index + 1,
+    area: row.area || "",
+    item: row.item || "",
+    ordem: row.ordem || index + 1,
+    fotoObrigatoria: !!row.fotoObrigatoria,
+    status: "",
+    observacao: "",
+    fotoBase64: "",
+    fotoMimeType: "",
+    fotoPreview: "",
+    open: false,
+  }));
+}
+
 export default function App() {
   const [responsavel, setResponsavel] = useState("");
   const [dataChecklist, setDataChecklist] = useState(todayInputValue());
-  const [items, setItems] = useState(buildInitialItems());
+  const [items, setItems] = useState([]);
   const [sending, setSending] = useState(false);
+  const [loadingTemplate, setLoadingTemplate] = useState(true);
+
+  useEffect(() => {
+    carregarTemplate();
+  }, []);
+
+  async function carregarTemplate() {
+    try {
+      setLoadingTemplate(true);
+
+      const response = await fetch(WEB_APP_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8",
+        },
+        body: JSON.stringify({
+          action: "getTemplate",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.ok) {
+        throw new Error(result.error || "Erro ao carregar template.");
+      }
+
+      setItems(buildItemsFromTemplate(result.template || []));
+    } catch (error) {
+      alert("Erro ao carregar itens do checklist: " + error.message);
+    } finally {
+      setLoadingTemplate(false);
+    }
+  }
 
   const total = items.length;
   const respondidos = items.filter((item) => item.status).length;
@@ -110,14 +91,22 @@ export default function App() {
   const progresso = total ? Math.round((respondidos / total) * 100) : 0;
 
   const groupedSections = useMemo(() => {
-    return SECTIONS.map((section) => {
-      const sectionItems = items.filter((item) => item.area === section.area);
-      const done = sectionItems.filter((item) => item.status).length;
+    const grouped = {};
+
+    items.forEach((item) => {
+      if (!grouped[item.area]) grouped[item.area] = [];
+      grouped[item.area].push(item);
+    });
+
+    return Object.keys(grouped).map((area) => {
+      const areaItems = grouped[area].sort((a, b) => a.ordem - b.ordem);
+      const done = areaItems.filter((item) => item.status).length;
+
       return {
-        area: section.area,
-        items: sectionItems,
+        area,
+        items: areaItems,
         done,
-        total: sectionItems.length,
+        total: areaItems.length,
       };
     });
   }, [items]);
@@ -129,10 +118,17 @@ export default function App() {
   }
 
   function setStatus(id, status) {
-    updateItem(id, {
-      status,
-      open: status === "NÃO" ? true : undefined,
-    });
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+
+        return {
+          ...item,
+          status,
+          open: status === "NÃO" ? true : item.open,
+        };
+      })
+    );
   }
 
   async function handlePhoto(id, file) {
@@ -145,6 +141,18 @@ export default function App() {
       fotoPreview: base64,
       open: true,
     });
+  }
+
+  function getPhotoRequirementText(item) {
+    if (item.fotoObrigatoria) {
+      return "Foto obrigatória";
+    }
+
+    if (item.status === "NÃO") {
+      return "Não conforme: foto obrigatória";
+    }
+
+    return "Se não conforme: foto + descrição";
   }
 
   function validate() {
@@ -168,6 +176,15 @@ export default function App() {
       return `O item "${naoConformeSemObs.item}" está como Não conforme e precisa de descrição obrigatória.`;
     }
 
+    const fotoObrigatoriaFaltando = items.find((item) => {
+      const precisaFoto = item.fotoObrigatoria || item.status === "NÃO";
+      return precisaFoto && !item.fotoBase64;
+    });
+
+    if (fotoObrigatoriaFaltando) {
+      return `O item "${fotoObrigatoriaFaltando.item}" precisa de foto obrigatória.`;
+    }
+
     return null;
   }
 
@@ -179,6 +196,7 @@ export default function App() {
     }
 
     const payload = {
+      action: "saveChecklist",
       data: dataChecklist,
       responsavel: responsavel.trim(),
       respostas: items.map((item) => ({
@@ -208,11 +226,11 @@ export default function App() {
         throw new Error(result.error || "Erro ao salvar checklist.");
       }
 
-      alert("Checklist enviado com sucesso.");
+      alert(result.message || "Checklist enviado com sucesso.");
 
       setResponsavel("");
       setDataChecklist(todayInputValue());
-      setItems(buildInitialItems());
+      await carregarTemplate();
     } catch (error) {
       alert("Erro ao enviar: " + error.message);
     } finally {
@@ -379,190 +397,241 @@ export default function App() {
             />
           </div>
 
-          {groupedSections.map((section) => (
+          {loadingTemplate ? (
             <div
-              key={section.area}
               style={{
                 background: "#fff",
                 borderRadius: 18,
-                marginBottom: 16,
+                padding: 24,
                 border: "1px solid #e5e7eb",
-                overflow: "hidden",
+                textAlign: "center",
               }}
             >
+              Carregando checklist...
+            </div>
+          ) : (
+            groupedSections.map((section) => (
               <div
+                key={section.area}
                 style={{
-                  padding: 16,
-                  background: "#f8fafc",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  fontWeight: 700,
+                  background: "#fff",
+                  borderRadius: 18,
+                  marginBottom: 16,
+                  border: "1px solid #e5e7eb",
+                  overflow: "hidden",
                 }}
               >
-                <span>{section.area}</span>
-                <span style={{ color: "#64748b" }}>
-                  {section.done}/{section.total}
-                </span>
-              </div>
-
-              {section.items.map((item, index) => (
                 <div
-                  key={item.id}
                   style={{
                     padding: 16,
-                    borderTop: index === 0 ? "1px solid #e5e7eb" : "1px solid #e5e7eb",
+                    background: "#f8fafc",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    fontWeight: 700,
                   }}
                 >
-                  <div style={{ fontWeight: 700, marginBottom: 12 }}>{item.item}</div>
+                  <span>{section.area}</span>
+                  <span style={{ color: "#64748b" }}>
+                    {section.done}/{section.total}
+                  </span>
+                </div>
 
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      flexWrap: "wrap",
-                      marginBottom: 10,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setStatus(item.id, "SIM")}
-                      style={{
-                        padding: "10px 14px",
-                        borderRadius: 12,
-                        border: "1px solid #d1d5db",
-                        background: item.status === "SIM" ? "#16a34a" : "#f8fafc",
-                        color: item.status === "SIM" ? "#fff" : "#111827",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Conforme
-                    </button>
+                {section.items.map((item, index) => {
+                  const precisaFotoAgora = item.fotoObrigatoria || item.status === "NÃO";
+                  const fotoFeita = !!item.fotoBase64;
 
-                    <button
-                      type="button"
-                      onClick={() => setStatus(item.id, "NÃO")}
-                      style={{
-                        padding: "10px 14px",
-                        borderRadius: 12,
-                        border: "1px solid #d1d5db",
-                        background: item.status === "NÃO" ? "#d97706" : "#f8fafc",
-                        color: item.status === "NÃO" ? "#fff" : "#111827",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Não conforme
-                    </button>
-
-                    <label
-                      style={{
-                        padding: "10px 14px",
-                        borderRadius: 12,
-                        border: "1px solid #d1d5db",
-                        background: "#fff",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                      }}
-                    >
-                      Tirar foto
-                      <input
-                        hidden
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={(e) => handlePhoto(item.id, e.target.files?.[0])}
-                      />
-                    </label>
-                  </div>
-
-                  {item.status === "NÃO" && (
+                  return (
                     <div
+                      key={item.id}
                       style={{
-                        marginBottom: 8,
-                        color: "#b45309",
-                        fontSize: 14,
-                        fontWeight: 600,
+                        padding: 16,
+                        borderTop: index === 0 ? "1px solid #e5e7eb" : "1px solid #e5e7eb",
                       }}
                     >
-                      Descrição obrigatória para item não conforme
-                    </div>
-                  )}
+                      <div style={{ fontWeight: 700, marginBottom: 8 }}>{item.item}</div>
 
-                  <button
-                    type="button"
-                    onClick={() => updateItem(item.id, { open: !item.open })}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      padding: 0,
-                      color: "#475569",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      marginBottom: item.open ? 12 : 0,
-                    }}
-                  >
-                    {item.open ? "Ocultar detalhes" : "Adicionar observação"}
-                  </button>
-
-                  {item.open && (
-                    <div>
-                      <textarea
-                        value={item.observacao}
-                        onChange={(e) =>
-                          updateItem(item.id, { observacao: e.target.value })
-                        }
-                        placeholder="Descreva o que foi observado"
-                        style={{
-                          width: "100%",
-                          minHeight: 90,
-                          borderRadius: 12,
-                          border: "1px solid #d1d5db",
-                          padding: 12,
-                          boxSizing: "border-box",
-                          resize: "vertical",
-                        }}
-                      />
-
-                      {item.fotoPreview ? (
-                        <img
-                          src={item.fotoPreview}
-                          alt={item.item}
+                      <div style={{ marginBottom: 12 }}>
+                        <span
                           style={{
-                            width: "100%",
-                            marginTop: 12,
-                            borderRadius: 12,
-                            maxHeight: 240,
-                            objectFit: "cover",
-                            border: "1px solid #e5e7eb",
-                          }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            marginTop: 12,
-                            height: 120,
-                            borderRadius: 12,
-                            border: "1px dashed #cbd5e1",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "#64748b",
-                            fontSize: 14,
+                            display: "inline-block",
+                            padding: "5px 10px",
+                            borderRadius: 999,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            background: precisaFotoAgora ? "#fee2e2" : "#e0f2fe",
+                            color: precisaFotoAgora ? "#991b1b" : "#075985",
                           }}
                         >
-                          Nenhuma foto anexada
+                          {getPhotoRequirementText(item)}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          flexWrap: "wrap",
+                          marginBottom: 10,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setStatus(item.id, "SIM")}
+                          style={{
+                            padding: "10px 14px",
+                            borderRadius: 12,
+                            border: "1px solid #d1d5db",
+                            background: item.status === "SIM" ? "#16a34a" : "#f8fafc",
+                            color: item.status === "SIM" ? "#fff" : "#111827",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Conforme
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setStatus(item.id, "NÃO")}
+                          style={{
+                            padding: "10px 14px",
+                            borderRadius: 12,
+                            border: "1px solid #d1d5db",
+                            background: item.status === "NÃO" ? "#d97706" : "#f8fafc",
+                            color: item.status === "NÃO" ? "#fff" : "#111827",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Não conforme
+                        </button>
+
+                        <label
+                          style={{
+                            padding: "10px 14px",
+                            borderRadius: 12,
+                            border: precisaFotoAgora && !fotoFeita
+                              ? "2px solid #dc2626"
+                              : "1px solid #d1d5db",
+                            background: fotoFeita ? "#dcfce7" : "#fff",
+                            color: "#111827",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          {fotoFeita ? "Foto anexada" : "Tirar foto"}
+                          <input
+                            hidden
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={(e) => handlePhoto(item.id, e.target.files?.[0])}
+                          />
+                        </label>
+                      </div>
+
+                      {item.status === "NÃO" && (
+                        <div
+                          style={{
+                            marginBottom: 8,
+                            color: "#b45309",
+                            fontSize: 14,
+                            fontWeight: 600,
+                          }}
+                        >
+                          Não conforme: descrição e foto obrigatórias
+                        </div>
+                      )}
+
+                      {item.fotoObrigatoria && (
+                        <div
+                          style={{
+                            marginBottom: 8,
+                            color: "#991b1b",
+                            fontSize: 14,
+                            fontWeight: 600,
+                          }}
+                        >
+                          Este item exige foto mesmo quando estiver conforme
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => updateItem(item.id, { open: !item.open })}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          padding: 0,
+                          color: "#475569",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          marginBottom: item.open ? 12 : 0,
+                        }}
+                      >
+                        {item.open ? "Ocultar detalhes" : "Adicionar observação"}
+                      </button>
+
+                      {item.open && (
+                        <div>
+                          <textarea
+                            value={item.observacao}
+                            onChange={(e) =>
+                              updateItem(item.id, { observacao: e.target.value })
+                            }
+                            placeholder="Descreva o que foi observado"
+                            style={{
+                              width: "100%",
+                              minHeight: 90,
+                              borderRadius: 12,
+                              border: "1px solid #d1d5db",
+                              padding: 12,
+                              boxSizing: "border-box",
+                              resize: "vertical",
+                            }}
+                          />
+
+                          {item.fotoPreview ? (
+                            <img
+                              src={item.fotoPreview}
+                              alt={item.item}
+                              style={{
+                                width: "100%",
+                                marginTop: 12,
+                                borderRadius: 12,
+                                maxHeight: 240,
+                                objectFit: "cover",
+                                border: "1px solid #e5e7eb",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                marginTop: 12,
+                                height: 120,
+                                borderRadius: 12,
+                                border: "1px dashed #cbd5e1",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#64748b",
+                                fontSize: 14,
+                              }}
+                            >
+                              Nenhuma foto anexada
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ))}
+                  );
+                })}
+              </div>
+            ))
+          )}
         </div>
 
         <div
@@ -580,7 +649,7 @@ export default function App() {
             <button
               type="button"
               onClick={enviar}
-              disabled={sending}
+              disabled={sending || loadingTemplate}
               style={{
                 width: "100%",
                 minHeight: 54,
