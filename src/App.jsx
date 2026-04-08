@@ -190,6 +190,7 @@ if (!nomeResponsavel.trim()) {
 
     setAreas(areasTratadas);
     setResponsavelConfirmado(nomeResponsavel.trim());
+    setResponsavel(nomeResponsavel.trim());
 
     if (areasTratadas.length > 0) {
       setAreaAberta(areasTratadas[0].area);
