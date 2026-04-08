@@ -537,20 +537,20 @@ if (!nomeResponsavel.trim()) {
   }}
 >
               <button
-                type="button"
-                onClick={() => toggleArea(area.area)}
-                style={{
-                  width: "100%",
-                  border: "none",
-                  background: "#f8fafc",
-                  padding: 16,
-                  cursor: "pointer",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  textAlign: "left",
-                }}
-              >
+  type="button"
+  onClick={() => toggleArea(area.area)}
+  style={{
+    width: "100%",
+    border: "none",
+    background: status === "Concluída" ? "#d7e5da" : "#f8fafc",
+    padding: 16,
+    cursor: "pointer",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    textAlign: "left",
+  }}
+>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 18 }}>{area.area}</div>
                   <div style={{ marginTop: 6, fontSize: 13, color: "#64748b" }}>
