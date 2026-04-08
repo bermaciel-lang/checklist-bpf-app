@@ -381,8 +381,8 @@ if (!nomeResponsavel.trim()) {
         throw new Error(result.error || "Erro ao salvar área.");
       }
 
-      await carregarChecklist(responsavelConfirmado);
-
+      alert("Área salva com sucesso.");
+      
     } catch (error) {
       alert("Erro ao salvar área: " + error.message);
     } finally {
