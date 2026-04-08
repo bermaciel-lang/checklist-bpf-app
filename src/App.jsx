@@ -581,9 +581,9 @@ if (!nomeResponsavel.trim()) {
   style={{
     padding: 14,
     marginBottom: 14,
-    border: "2px solid #cbd5e1",
+    border: item.resposta?.conforme ? "2px solid #93c5aa" : "2px solid #cbd5e1",
     borderRadius: 14,
-    background: "#ffffff",
+    background: item.resposta?.conforme ? "#dfe8e2" : "#ffffff",
     boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
   }}
 >
@@ -762,20 +762,23 @@ if (!nomeResponsavel.trim()) {
 />
                         </div>
 
-                        {item.resposta?.fotoPreview ? (
-                          <img
-                            src={item.resposta.fotoPreview}
-                            alt={item.item}
-                            style={{
-                              width: "100%",
-                              marginBottom: 12,
-                              borderRadius: 12,
-                              maxHeight: 240,
-                              objectFit: "cover",
-                              border: "1px solid #e5e7eb",
-                            }}
-                          />
-                        ) : null}
+                        {{item.resposta?.fotoPreview ? (
+  <div
+    style={{
+      marginBottom: 12,
+      display: "inline-block",
+      background: "#ecfdf5",
+      color: "#166534",
+      border: "1px solid #bbf7d0",
+      borderRadius: 999,
+      padding: "8px 12px",
+      fontSize: 13,
+      fontWeight: 700,
+    }}
+  >
+    Foto já adicionada
+  </div>
+) : null}
                       </div>
                     );
                   })}
