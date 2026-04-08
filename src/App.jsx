@@ -686,19 +686,22 @@ if (!nomeResponsavel.trim()) {
                         {item.observacaoItem ? (
                           <div style={{ marginBottom: 12 }}>
                             <button
-                              type="button"
-                              onClick={() => toggleOrientacao(area.area, item.item)}
-                              style={{
-                                border: "none",
-                                background: "transparent",
-                                padding: 0,
-                                color: "#334155",
-                                fontWeight: 700,
-                                cursor: "pointer",
-                              }}
-                            >
-                              {item.open ? "Ocultar orientação" : "Ver orientação"}
-                            </button>
+  type="button"
+  onClick={() => toggleOrientacao(area.area, item.item)}
+  style={{
+    border: "none",
+    background: item.open ? "#dbeafe" : "#2563eb",
+    padding: "10px 14px",
+    color: item.open ? "#1d4ed8" : "#ffffff",
+    fontWeight: 800,
+    cursor: "pointer",
+    borderRadius: 12,
+    display: "inline-block",
+    fontSize: 14,
+  }}
+>
+  {item.open ? "Ocultar orientação" : "Ver orientação"}
+</button>
 
                             {item.open && (
                               <div
@@ -803,25 +806,29 @@ if (!nomeResponsavel.trim()) {
                           </label>
 
                           <textarea
-                            value={item.resposta?.observacao || ""}
-                            onChange={(e) =>
-                              updateItem(area.area, item.item, {
-                                observacao: e.target.value,
-                              })
-                            }
-                            placeholder="Descreva o que foi observado"
-                            style={{
-                              width: "100%",
-                              minHeight: 90,
-                              borderRadius: 12,
-                              border: observacaoObrigatoria
-                                ? "2px solid #f59e0b"
-                                : "1px solid #d1d5db",
-                              padding: 12,
-                              boxSizing: "border-box",
-                              resize: "vertical",
-                            }}
-                          />
+  value={item.resposta?.observacao || ""}
+  onChange={(e) =>
+    updateItem(area.area, item.item, {
+      observacao: e.target.value,
+    })
+  }
+  placeholder="Descreva o que foi observado"
+  rows={2}
+  style={{
+    width: "100%",
+    minHeight: 48,
+    height: 48,
+    borderRadius: 12,
+    border: observacaoObrigatoria
+      ? "2px solid #f59e0b"
+      : "1px solid #d1d5db",
+    padding: "12px 12px",
+    boxSizing: "border-box",
+    resize: "none",
+    fontSize: 16,
+    lineHeight: 1.3,
+  }}
+/>
                         </div>
 
                         {item.resposta?.fotoPreview ? (
