@@ -697,20 +697,30 @@ if (!nomeResponsavel.trim()) {
                           </button>
 
                           <label
-                            style={{
-                              padding: "10px 14px",
-                              borderRadius: 12,
-                              border: fotoObrigatoriaAgora
-                                ? "2px solid #dc2626"
-                                : "1px solid #cbd5e1",
-                              background: fotoObrigatoriaAgora ? "#fff1f2" : "#e5e7eb",
-                              color: fotoObrigatoriaAgora ? "#991b1b" : "#475569",
-                              fontWeight: 800,
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                            }}
-                          >
+  style={{
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: item.resposta?.fotoPreview
+      ? "1px solid #cbd5e1"
+      : fotoObrigatoriaAgora
+      ? "2px solid #dc2626"
+      : "1px solid #cbd5e1",
+    background: item.resposta?.fotoPreview
+      ? "#e5e7eb"
+      : fotoObrigatoriaAgora
+      ? "#fff1f2"
+      : "#e5e7eb",
+    color: item.resposta?.fotoPreview
+      ? "#475569"
+      : fotoObrigatoriaAgora
+      ? "#991b1b"
+      : "#475569",
+    fontWeight: 800,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+  }}
+>
                             Tirar foto
                             <input
                               hidden
@@ -722,6 +732,24 @@ if (!nomeResponsavel.trim()) {
                               }
                             />
                           </label>
+
+                          {item.resposta?.fotoPreview ? (
+  <div
+    style={{
+      padding: "10px 14px",
+      borderRadius: 12,
+      border: "1px solid #cbd5e1",
+      background: "#e5e7eb",
+      color: "#475569",
+      fontWeight: 800,
+      display: "inline-flex",
+      alignItems: "center",
+    }}
+  >
+    Foto já adicionada
+  </div>
+) : null}
+                          
                         </div>
 
                         <div style={{ marginBottom: 12 }}>
@@ -762,23 +790,6 @@ if (!nomeResponsavel.trim()) {
 />
                         </div>
 
-                        {item.resposta?.fotoPreview ? (
-  <div
-    style={{
-      marginBottom: 12,
-      display: "inline-block",
-      background: "#ecfdf5",
-      color: "#166534",
-      border: "1px solid #bbf7d0",
-      borderRadius: 999,
-      padding: "8px 12px",
-      fontSize: 13,
-      fontWeight: 700,
-    }}
-  >
-    Foto já adicionada
-  </div>
-) : null}
                       </div>
                     );
                   })}
