@@ -17,10 +17,37 @@ function formatDateBR(iso) {
   return `${day}/${month}/${year}`;
 }
 
-function fileToBase64(file) {
+function fileToBase64(file, maxWidth = 1280, quality = 0.65) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+
+    reader.onload = () => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+
+        let { width, height } = img;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+        resolve(compressedBase64);
+      };
+
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
