@@ -762,7 +762,7 @@ if (!nomeResponsavel.trim()) {
 />
                         </div>
 
-                        {{item.resposta?.fotoPreview ? (
+                        {item.resposta?.fotoPreview ? (
   <div
     style={{
       marginBottom: 12,
