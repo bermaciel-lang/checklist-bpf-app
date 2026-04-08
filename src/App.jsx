@@ -75,6 +75,7 @@ function isObservacaoObrigatoria(item) {
 export default function App() {
   const [responsavel, setResponsavel] = useState("");
   const [responsavelConfirmado, setResponsavelConfirmado] = useState("");
+  const [responsaveis, setResponsaveis] = useState([]);
   const [dataChecklist] = useState(todayInputValue());
   const [areas, setAreas] = useState([]);
   const [areaAberta, setAreaAberta] = useState("");
@@ -92,11 +93,39 @@ export default function App() {
     }, 0);
   }, [areas]);
 
-async function carregarChecklist(nomeResponsavel) {
-  if (!nomeResponsavel.trim()) {
-    alert("Digite o nome do responsável.");
-    return;
+  async function carregarResponsaveis() {
+  try {
+    const response = await fetch(WEB_APP_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        action: "getResponsaveis",
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!result.ok) {
+      throw new Error(result.error || "Erro ao carregar responsáveis.");
+    }
+
+    setResponsaveis(Array.isArray(result.responsaveis) ? result.responsaveis : []);
+  } catch (error) {
+    alert("Erro ao carregar responsáveis: " + error.message);
   }
+}
+
+  useEffect(() => {
+  carregarResponsaveis();
+}, []);
+
+async function carregarChecklist(nomeResponsavel) {
+if (!nomeResponsavel.trim()) {
+  alert("Selecione o colaborador.");
+  return;
+}
 
   try {
     setLoading(true);
@@ -473,23 +502,30 @@ async function carregarChecklist(nomeResponsavel) {
             border: "1px solid #e5e7eb",
           }}
         >
-          <label style={{ display: "block", fontWeight: 700, marginBottom: 8 }}>
-            Responsável
-          </label>
+<label style={{ display: "block", fontWeight: 700, marginBottom: 8 }}>
+  Colaborador
+</label>
 
-          <input
-            value={responsavel}
-            onChange={(e) => setResponsavel(e.target.value)}
-            placeholder="Nome do colaborador"
-            style={{
-              width: "100%",
-              padding: 12,
-              borderRadius: 12,
-              border: "1px solid #d1d5db",
-              boxSizing: "border-box",
-              marginBottom: 12,
-            }}
-          />
+<select
+  value={responsavel}
+  onChange={(e) => setResponsavel(e.target.value)}
+  style={{
+    width: "100%",
+    padding: 12,
+    borderRadius: 12,
+    border: "1px solid #d1d5db",
+    boxSizing: "border-box",
+    marginBottom: 12,
+    background: "#fff",
+  }}
+>
+  <option value="">Selecione o colaborador</option>
+  {responsaveis.map((nome) => (
+    <option key={nome} value={nome}>
+      {nome}
+    </option>
+  ))}
+</select>
 
           <button
             type="button"
@@ -510,18 +546,18 @@ async function carregarChecklist(nomeResponsavel) {
           </button>
         </div>
 
-        {responsavelConfirmado ? (
-          <div
-            style={{
-              marginBottom: 12,
-              fontSize: 14,
-              color: "#334155",
-              fontWeight: 600,
-            }}
-          >
-            Responsável carregado: {responsavelConfirmado}
-          </div>
-        ) : null}
+  {responsavelConfirmado ? (
+  <div
+    style={{
+      marginBottom: 12,
+      fontSize: 14,
+      color: "#334155",
+      fontWeight: 600,
+    }}
+  >
+    Colaborador selecionado: {responsavelConfirmado}
+  </div>
+) : null}
 
         {totalItens > 0 ? (
           <div
