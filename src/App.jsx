@@ -553,6 +553,7 @@ if (!nomeResponsavel.trim()) {
     Carregando checklist...
   </div>
 ) : null}
+</div>
 
         {totalItens > 0 ? (
           <div
