@@ -275,7 +275,7 @@ if (!nomeResponsavel.trim()) {
   async function handlePhoto(areaName, itemName, file) {
     if (!file) return;
 
-    const base64 = await fileToBase64(file);
+    const base64 = await fileToBase64(file, 1000, 0.55);
 
     setAreas((prev) =>
       prev.map((area) => {
@@ -291,7 +291,7 @@ if (!nomeResponsavel.trim()) {
               resposta: {
                 ...item.resposta,
                 fotoBase64: base64,
-                fotoMimeType: file.type || "image/jpeg",
+                fotoMimeType: "image/jpeg",
                 fotoPreview: base64,
               },
             };
@@ -377,7 +377,7 @@ if (!nomeResponsavel.trim()) {
       }
 
       await carregarChecklist(responsavelConfirmado);
-      alert("Item salvo com sucesso.");
+
     } catch (error) {
       alert("Erro ao salvar item: " + error.message);
     } finally {
@@ -443,7 +443,7 @@ if (!nomeResponsavel.trim()) {
       }
 
       await carregarChecklist(responsavelConfirmado);
-      alert("Área salva com sucesso.");
+
     } catch (error) {
       alert("Erro ao salvar área: " + error.message);
     } finally {
