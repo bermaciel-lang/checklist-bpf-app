@@ -65,73 +65,90 @@ export default function App() {
     }, 0);
   }, [areas]);
 
-  async function carregarChecklist(nomeResponsavel) {
-    if (!nomeResponsavel.trim()) {
-      alert("Digite o nome do responsável.");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setErro("");
-
-      const response = await fetch(WEB_APP_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8",
-        },
-        body: JSON.stringify({
-          action: "getChecklistState",
-          data: dataChecklist,
-          responsavel: nomeResponsavel.trim(),
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!result.ok) {
-        throw new Error(result.error || "Erro ao carregar checklist.");
-      }
-
-      const areasTratadas = (result.areas || []).map((area) => ({
-        ...area,
-        aberta: false,
-        itens: (area.itens || []).map((item) => ({
-          ...item,
-          open: false,
-          resposta: item.resposta
-            ? {
-                conforme: item.resposta.conforme || "",
-                observacao: item.resposta.observacao || "",
-                foto_url: item.resposta.foto_url || "",
-                fotoBase64: "",
-                fotoMimeType: "",
-                fotoPreview: item.resposta.foto_url || "",
-              }
-            : {
-                conforme: "",
-                observacao: "",
-                foto_url: "",
-                fotoBase64: "",
-                fotoMimeType: "",
-                fotoPreview: "",
-              },
-        })),
-      }));
-
-      setAreas(areasTratadas);
-      setResponsavelConfirmado(nomeResponsavel.trim());
-
-      if (areasTratadas.length > 0) {
-        setAreaAberta(areasTratadas[0].area);
-      }
-    } catch (error) {
-      setErro(error.message);
-      alert("Erro ao carregar: " + error.message);
-    } finally {
-      setLoading(false);
-    }
+async function carregarChecklist(nomeResponsavel) {
+  if (!nomeResponsavel.trim()) {
+    alert("Digite o nome do responsável.");
+    return;
   }
+
+  try {
+    setLoading(true);
+    setErro("");
+
+    const response = await fetch(WEB_APP_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        action: "getChecklistState",
+        data: dataChecklist,
+        responsavel: nomeResponsavel.trim(),
+      }),
+    });
+
+    const texto = await response.text();
+    console.log("RESPOSTA BRUTA BACKEND:", texto);
+
+    let result;
+    try {
+      result = JSON.parse(texto);
+    } catch {
+      throw new Error("O backend não retornou JSON válido.");
+    }
+
+    console.log("JSON BACKEND:", result);
+
+    if (!result.ok) {
+      throw new Error(result.error || "Erro ao carregar checklist.");
+    }
+
+    const areasRecebidas = Array.isArray(result.areas) ? result.areas : [];
+    console.log("AREAS RECEBIDAS:", areasRecebidas);
+
+    const areasTratadas = areasRecebidas.map((area) => ({
+      ...area,
+      aberta: false,
+      itens: (area.itens || []).map((item) => ({
+        ...item,
+        open: false,
+        resposta: item.resposta
+          ? {
+              conforme: item.resposta.conforme || "",
+              observacao: item.resposta.observacao || "",
+              foto_url: item.resposta.foto_url || "",
+              fotoBase64: "",
+              fotoMimeType: "",
+              fotoPreview: item.resposta.foto_url || "",
+            }
+          : {
+              conforme: "",
+              observacao: "",
+              foto_url: "",
+              fotoBase64: "",
+              fotoMimeType: "",
+              fotoPreview: "",
+            },
+      })),
+    }));
+
+    setAreas(areasTratadas);
+    setResponsavelConfirmado(nomeResponsavel.trim());
+
+    if (areasTratadas.length > 0) {
+      setAreaAberta(areasTratadas[0].area);
+    } else {
+      setAreaAberta("");
+      alert("O backend respondeu, mas não retornou nenhuma área para hoje.");
+    }
+  } catch (error) {
+    console.error(error);
+    setErro(error.message);
+    alert("Erro ao carregar: " + error.message);
+  } finally {
+    setLoading(false);
+  }
+}
 
   function toggleArea(nomeArea) {
     setAreaAberta((prev) => (prev === nomeArea ? "" : nomeArea));
