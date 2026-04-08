@@ -640,16 +640,16 @@ if (!nomeResponsavel.trim()) {
 
                     return (
                       <div
-                        key={item.item}
-                        style={{
-                          paddingBottom: 18,
-                          marginBottom: 18,
-                          borderBottom:
-                            index === area.itens.length - 1
-                              ? "none"
-                              : "1px solid #e5e7eb",
-                        }}
-                      >
+  key={item.item}
+  style={{
+    padding: 14,
+    marginBottom: 14,
+    border: "1px solid #e2e8f0",
+    borderRadius: 14,
+    background: "#fcfcfd",
+    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+  }}
+>
                         <div
                           style={{
                             fontWeight: 800,
