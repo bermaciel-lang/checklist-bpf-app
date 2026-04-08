@@ -276,7 +276,7 @@ if (!nomeResponsavel.trim()) {
   async function handlePhoto(areaName, itemName, file) {
     if (!file) return;
 
-    const base64 = await fileToBase64(file, 1000, 0.55);
+    const base64 = await fileToBase64(file, 7000, 0.4);
 
     setAreas((prev) =>
       prev.map((area) => {
