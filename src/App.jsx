@@ -3,21 +3,18 @@ import React, { useEffect, useMemo, useState } from "react";
 const WEB_APP_URL =
   "https://script.google.com/macros/s/AKfycbw88pz4BJNUwwQJQ95yRcBjPiqjeIZFQMrRqR3o6T95eu5G1_1w1Juh8hd821QztneA/exec";
 
-function formatLongDate(date = new Date()) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(date);
-}
-
 function todayInputValue() {
   const d = new Date();
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function formatDateBR(iso) {
+  if (!iso) return "";
+  const [year, month, day] = iso.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 function fileToBase64(file) {
@@ -29,36 +26,54 @@ function fileToBase64(file) {
   });
 }
 
-function buildItemsFromTemplate(template) {
-  return template.map((row, index) => ({
-    id: index + 1,
-    area: row.area || "",
-    item: row.item || "",
-    ordem: row.ordem || index + 1,
-    fotoObrigatoria: !!row.fotoObrigatoria,
-    status: "",
-    observacao: "",
-    fotoBase64: "",
-    fotoMimeType: "",
-    fotoPreview: "",
-    open: false,
-  }));
+function getAreaStatus(area) {
+  const total = area.itens.length;
+  const done = area.itens.filter((item) => item.resposta?.conforme).length;
+
+  if (done === 0) return "Não iniciada";
+  if (done < total) return "Em andamento";
+  return "Concluída";
+}
+
+function isFotoObrigatoriaAgora(item) {
+  const conforme = item?.resposta?.conforme || "";
+  return item?.fotoObrigatoria || conforme === "NÃO";
+}
+
+function isObservacaoObrigatoria(item) {
+  const conforme = item?.resposta?.conforme || "";
+  return conforme === "NÃO";
 }
 
 export default function App() {
   const [responsavel, setResponsavel] = useState("");
-  const [dataChecklist, setDataChecklist] = useState(todayInputValue());
-  const [items, setItems] = useState([]);
-  const [sending, setSending] = useState(false);
-  const [loadingTemplate, setLoadingTemplate] = useState(true);
+  const [responsavelConfirmado, setResponsavelConfirmado] = useState("");
+  const [dataChecklist] = useState(todayInputValue());
+  const [areas, setAreas] = useState([]);
+  const [areaAberta, setAreaAberta] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [salvandoChave, setSalvandoChave] = useState("");
+  const [erro, setErro] = useState("");
 
-  useEffect(() => {
-    carregarTemplate();
-  }, []);
+  const totalItens = useMemo(() => {
+    return areas.reduce((acc, area) => acc + area.itens.length, 0);
+  }, [areas]);
 
-  async function carregarTemplate() {
+  const totalRespondidos = useMemo(() => {
+    return areas.reduce((acc, area) => {
+      return acc + area.itens.filter((item) => item.resposta?.conforme).length;
+    }, 0);
+  }, [areas]);
+
+  async function carregarChecklist(nomeResponsavel) {
+    if (!nomeResponsavel.trim()) {
+      alert("Digite o nome do responsável.");
+      return;
+    }
+
     try {
-      setLoadingTemplate(true);
+      setLoading(true);
+      setErro("");
 
       const response = await fetch(WEB_APP_URL, {
         method: "POST",
@@ -66,606 +81,726 @@ export default function App() {
           "Content-Type": "text/plain;charset=utf-8",
         },
         body: JSON.stringify({
-          action: "getTemplate",
+          action: "getChecklistState",
+          data: dataChecklist,
+          responsavel: nomeResponsavel.trim(),
         }),
       });
 
       const result = await response.json();
 
       if (!result.ok) {
-        throw new Error(result.error || "Erro ao carregar template.");
+        throw new Error(result.error || "Erro ao carregar checklist.");
       }
 
-      setItems(buildItemsFromTemplate(result.template || []));
+      const areasTratadas = (result.areas || []).map((area) => ({
+        ...area,
+        aberta: false,
+        itens: (area.itens || []).map((item) => ({
+          ...item,
+          open: false,
+          resposta: item.resposta
+            ? {
+                conforme: item.resposta.conforme || "",
+                observacao: item.resposta.observacao || "",
+                foto_url: item.resposta.foto_url || "",
+                fotoBase64: "",
+                fotoMimeType: "",
+                fotoPreview: item.resposta.foto_url || "",
+              }
+            : {
+                conforme: "",
+                observacao: "",
+                foto_url: "",
+                fotoBase64: "",
+                fotoMimeType: "",
+                fotoPreview: "",
+              },
+        })),
+      }));
+
+      setAreas(areasTratadas);
+      setResponsavelConfirmado(nomeResponsavel.trim());
+
+      if (areasTratadas.length > 0) {
+        setAreaAberta(areasTratadas[0].area);
+      }
     } catch (error) {
-      alert("Erro ao carregar itens do checklist: " + error.message);
+      setErro(error.message);
+      alert("Erro ao carregar: " + error.message);
     } finally {
-      setLoadingTemplate(false);
+      setLoading(false);
     }
   }
 
-  const total = items.length;
-  const respondidos = items.filter((item) => item.status).length;
-  const pendentes = items.filter((item) => !item.status).length;
-  const naoConformes = items.filter((item) => item.status === "NÃO").length;
-  const progresso = total ? Math.round((respondidos / total) * 100) : 0;
-
-  const groupedSections = useMemo(() => {
-    const grouped = {};
-
-    items.forEach((item) => {
-      if (!grouped[item.area]) grouped[item.area] = [];
-      grouped[item.area].push(item);
-    });
-
-    return Object.keys(grouped).map((area) => {
-      const areaItems = grouped[area].sort((a, b) => a.ordem - b.ordem);
-      const done = areaItems.filter((item) => item.status).length;
-
-      return {
-        area,
-        items: areaItems,
-        done,
-        total: areaItems.length,
-      };
-    });
-  }, [items]);
-
-  function updateItem(id, patch) {
-    setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
-    );
+  function toggleArea(nomeArea) {
+    setAreaAberta((prev) => (prev === nomeArea ? "" : nomeArea));
   }
 
-  function setStatus(id, status) {
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.id !== id) return item;
+  function updateItem(areaName, itemName, patch) {
+    setAreas((prev) =>
+      prev.map((area) => {
+        if (area.area !== areaName) return area;
 
         return {
-          ...item,
-          status,
-          open: status === "NÃO" ? true : item.open,
+          ...area,
+          itens: area.itens.map((item) => {
+            if (item.item !== itemName) return item;
+
+            return {
+              ...item,
+              resposta: {
+                ...item.resposta,
+                ...patch,
+              },
+            };
+          }),
         };
       })
     );
   }
 
-  async function handlePhoto(id, file) {
+  function toggleOrientacao(areaName, itemName) {
+    setAreas((prev) =>
+      prev.map((area) => {
+        if (area.area !== areaName) return area;
+
+        return {
+          ...area,
+          itens: area.itens.map((item) => {
+            if (item.item !== itemName) return item;
+            return { ...item, open: !item.open };
+          }),
+        };
+      })
+    );
+  }
+
+  function setStatus(areaName, itemName, status) {
+    setAreas((prev) =>
+      prev.map((area) => {
+        if (area.area !== areaName) return area;
+
+        return {
+          ...area,
+          itens: area.itens.map((item) => {
+            if (item.item !== itemName) return item;
+
+            return {
+              ...item,
+              resposta: {
+                ...item.resposta,
+                conforme: status,
+              },
+            };
+          }),
+        };
+      })
+    );
+  }
+
+  async function handlePhoto(areaName, itemName, file) {
     if (!file) return;
+
     const base64 = await fileToBase64(file);
 
-    updateItem(id, {
-      fotoBase64: base64,
-      fotoMimeType: file.type || "image/jpeg",
-      fotoPreview: base64,
-      open: true,
-    });
-  }
+    setAreas((prev) =>
+      prev.map((area) => {
+        if (area.area !== areaName) return area;
 
-  function getPhotoRequirementText(item) {
-    if (item.fotoObrigatoria) {
-      return "Foto obrigatória";
-    }
+        return {
+          ...area,
+          itens: area.itens.map((item) => {
+            if (item.item !== itemName) return item;
 
-    if (item.status === "NÃO") {
-      return "Não conforme: foto obrigatória";
-    }
-
-    return "Se não conforme: foto + descrição";
-  }
-
-  function validate() {
-    if (!responsavel.trim()) {
-      return "Informe o responsável.";
-    }
-
-    if (!dataChecklist) {
-      return "Informe a data.";
-    }
-
-    const pendente = items.find((item) => !item.status);
-    if (pendente) {
-      return `Responda todos os itens antes de enviar. Falta: ${pendente.item}`;
-    }
-
-    const naoConformeSemObs = items.find(
-      (item) => item.status === "NÃO" && !item.observacao.trim()
+            return {
+              ...item,
+              resposta: {
+                ...item.resposta,
+                fotoBase64: base64,
+                fotoMimeType: file.type || "image/jpeg",
+                fotoPreview: base64,
+              },
+            };
+          }),
+        };
+      })
     );
-    if (naoConformeSemObs) {
-      return `O item "${naoConformeSemObs.item}" está como Não conforme e precisa de descrição obrigatória.`;
+  }
+
+  function validarItem(item) {
+    const conforme = item.resposta?.conforme || "";
+    const observacao = item.resposta?.observacao || "";
+    const fotoBase64 = item.resposta?.fotoBase64 || "";
+    const fotoUrl = item.resposta?.foto_url || "";
+    const precisaFoto = item.fotoObrigatoria || conforme === "NÃO";
+
+    if (!conforme) {
+      return `Marque Conforme ou Não conforme no item "${item.item}".`;
     }
 
-    const fotoObrigatoriaFaltando = items.find((item) => {
-      const precisaFoto = item.fotoObrigatoria || item.status === "NÃO";
-      return precisaFoto && !item.fotoBase64;
-    });
+    if (conforme === "NÃO" && !observacao.trim()) {
+      return `Preencha a observação do item "${item.item}".`;
+    }
 
-    if (fotoObrigatoriaFaltando) {
-      return `O item "${fotoObrigatoriaFaltando.item}" precisa de foto obrigatória.`;
+    if (precisaFoto && !fotoBase64 && !fotoUrl) {
+      return `Tire a foto do item "${item.item}".`;
     }
 
     return null;
   }
 
-  async function enviar() {
-    const error = validate();
-    if (error) {
-      alert(error);
+  async function salvarItem(areaName, itemName) {
+    if (!responsavelConfirmado.trim()) {
+      alert("Primeiro clique em Carregar checklist.");
       return;
     }
 
-    const payload = {
-      action: "saveChecklist",
-      data: dataChecklist,
-      responsavel: responsavel.trim(),
-      respostas: items.map((item) => ({
-        area: item.area,
-        item: item.item,
-        conforme: item.status,
-        observacao: item.observacao.trim(),
-        fotoBase64: item.fotoBase64,
-        fotoMimeType: item.fotoMimeType,
-      })),
-    };
+    const area = areas.find((a) => a.area === areaName);
+    if (!area) return;
+
+    const item = area.itens.find((i) => i.item === itemName);
+    if (!item) return;
+
+    const erroValidacao = validarItem(item);
+    if (erroValidacao) {
+      alert(erroValidacao);
+      return;
+    }
+
+    const chave = `${areaName}__${itemName}`;
 
     try {
-      setSending(true);
+      setSalvandoChave(chave);
 
       const response = await fetch(WEB_APP_URL, {
         method: "POST",
         headers: {
           "Content-Type": "text/plain;charset=utf-8",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          action: "saveItem",
+          data: dataChecklist,
+          responsavel: responsavelConfirmado,
+          resposta: {
+            area: areaName,
+            item: item.item,
+            conforme: item.resposta.conforme,
+            observacao: item.resposta.observacao || "",
+            foto: item.resposta.fotoBase64
+              ? {
+                  mimeType: item.resposta.fotoMimeType || "image/jpeg",
+                  base64: item.resposta.fotoBase64,
+                }
+              : null,
+          },
+        }),
       });
 
       const result = await response.json();
 
       if (!result.ok) {
-        throw new Error(result.error || "Erro ao salvar checklist.");
+        throw new Error(result.error || "Erro ao salvar item.");
       }
 
-      alert(result.message || "Checklist enviado com sucesso.");
-
-      setResponsavel("");
-      setDataChecklist(todayInputValue());
-      await carregarTemplate();
+      await carregarChecklist(responsavelConfirmado);
+      alert("Item salvo com sucesso.");
     } catch (error) {
-      alert("Erro ao enviar: " + error.message);
+      alert("Erro ao salvar item: " + error.message);
     } finally {
-      setSending(false);
+      setSalvandoChave("");
+    }
+  }
+
+  async function salvarArea(areaName) {
+    if (!responsavelConfirmado.trim()) {
+      alert("Primeiro clique em Carregar checklist.");
+      return;
+    }
+
+    const area = areas.find((a) => a.area === areaName);
+    if (!area) return;
+
+    const itensRespondidos = area.itens.filter((item) => item.resposta?.conforme);
+
+    if (itensRespondidos.length === 0) {
+      alert("Nenhum item respondido nessa área.");
+      return;
+    }
+
+    for (const item of itensRespondidos) {
+      const erroValidacao = validarItem(item);
+      if (erroValidacao) {
+        alert(erroValidacao);
+        return;
+      }
+    }
+
+    try {
+      setSalvandoChave(areaName);
+
+      const response = await fetch(WEB_APP_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8",
+        },
+        body: JSON.stringify({
+          action: "saveChecklist",
+          data: dataChecklist,
+          responsavel: responsavelConfirmado,
+          respostas: itensRespondidos.map((item) => ({
+            area: areaName,
+            item: item.item,
+            conforme: item.resposta.conforme,
+            observacao: item.resposta.observacao || "",
+            foto: item.resposta.fotoBase64
+              ? {
+                  mimeType: item.resposta.fotoMimeType || "image/jpeg",
+                  base64: item.resposta.fotoBase64,
+                }
+              : null,
+          })),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.ok) {
+        throw new Error(result.error || "Erro ao salvar área.");
+      }
+
+      await carregarChecklist(responsavelConfirmado);
+      alert("Área salva com sucesso.");
+    } catch (error) {
+      alert("Erro ao salvar área: " + error.message);
+    } finally {
+      setSalvandoChave("");
     }
   }
 
   return (
-    <div style={{ background: "#f3f4f6", minHeight: "100vh" }}>
-      <div style={{ maxWidth: 560, margin: "0 auto", paddingBottom: 100 }}>
+    <div
+      style={{
+        background: "#f3f4f6",
+        minHeight: "100vh",
+        paddingBottom: 40,
+      }}
+    >
+      <div style={{ maxWidth: 620, margin: "0 auto", padding: 16 }}>
         <div
           style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 20,
             background: "#0f172a",
             color: "#fff",
-            padding: 16,
-            boxShadow: "0 6px 18px rgba(0,0,0,0.15)",
+            borderRadius: 18,
+            padding: 18,
+            marginBottom: 16,
           }}
         >
-          <h1 style={{ margin: 0, textAlign: "center", fontSize: 28 }}>
-            Check List BPF - Controle Diário
-          </h1>
-
-          <p
+          <h1
             style={{
-              marginTop: 8,
+              margin: 0,
+              fontSize: 24,
+              lineHeight: 1.2,
               textAlign: "center",
-              color: "#cbd5e1",
-              textTransform: "capitalize",
             }}
           >
-            {formatLongDate()}
-          </p>
+            Check list operação - Controle diário
+          </h1>
 
           <div
             style={{
-              marginTop: 16,
-              background: "rgba(255,255,255,0.08)",
-              borderRadius: 16,
-              padding: 12,
+              marginTop: 10,
+              textAlign: "center",
+              fontSize: 16,
+              color: "#cbd5e1",
+              fontWeight: 600,
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: 14,
-                marginBottom: 8,
-              }}
-            >
-              <span>Progresso</span>
-              <strong>
-                {respondidos}/{total}
-              </strong>
-            </div>
-
-            <div
-              style={{
-                width: "100%",
-                height: 8,
-                borderRadius: 999,
-                background: "rgba(255,255,255,0.2)",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${progresso}%`,
-                  height: "100%",
-                  background: "#fff",
-                }}
-              />
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                flexWrap: "wrap",
-                marginTop: 12,
-              }}
-            >
-              <span
-                style={{
-                  background: "#fff",
-                  color: "#111827",
-                  borderRadius: 999,
-                  padding: "6px 10px",
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-              >
-                Pendentes: {pendentes}
-              </span>
-
-              <span
-                style={{
-                  background: "#fef3c7",
-                  color: "#92400e",
-                  borderRadius: 999,
-                  padding: "6px 10px",
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-              >
-                Não conformes: {naoConformes}
-              </span>
-            </div>
+            Data: {formatDateBR(dataChecklist)}
           </div>
         </div>
 
-        <div style={{ padding: 16 }}>
-          <div
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 18,
+            padding: 16,
+            marginBottom: 16,
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          <label style={{ display: "block", fontWeight: 700, marginBottom: 8 }}>
+            Responsável
+          </label>
+
+          <input
+            value={responsavel}
+            onChange={(e) => setResponsavel(e.target.value)}
+            placeholder="Nome do colaborador"
             style={{
-              background: "#fff",
-              borderRadius: 18,
-              padding: 16,
-              marginBottom: 16,
-              border: "1px solid #e5e7eb",
+              width: "100%",
+              padding: 12,
+              borderRadius: 12,
+              border: "1px solid #d1d5db",
+              boxSizing: "border-box",
+              marginBottom: 12,
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={() => carregarChecklist(responsavel)}
+            disabled={loading}
+            style={{
+              width: "100%",
+              minHeight: 48,
+              border: "none",
+              borderRadius: 12,
+              background: "#0f172a",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: "pointer",
             }}
           >
-            <label style={{ display: "block", fontWeight: 700, marginBottom: 8 }}>
-              Responsável
-            </label>
-            <input
-              value={responsavel}
-              onChange={(e) => setResponsavel(e.target.value)}
-              placeholder="Nome do colaborador"
-              style={{
-                width: "100%",
-                padding: 12,
-                borderRadius: 12,
-                border: "1px solid #d1d5db",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
+            {loading ? "Carregando..." : "Carregar checklist"}
+          </button>
+        </div>
 
+        {responsavelConfirmado ? (
           <div
             style={{
-              background: "#fff",
-              borderRadius: 18,
-              padding: 16,
-              marginBottom: 16,
-              border: "1px solid #e5e7eb",
+              marginBottom: 12,
+              fontSize: 14,
+              color: "#334155",
+              fontWeight: 600,
             }}
           >
-            <label style={{ display: "block", fontWeight: 700, marginBottom: 8 }}>
-              Data
-            </label>
-            <input
-              type="date"
-              value={dataChecklist}
-              onChange={(e) => setDataChecklist(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 12,
-                borderRadius: 12,
-                border: "1px solid #d1d5db",
-                boxSizing: "border-box",
-              }}
-            />
+            Responsável carregado: {responsavelConfirmado}
           </div>
+        ) : null}
 
-          {loadingTemplate ? (
+        {totalItens > 0 ? (
+          <div
+            style={{
+              marginBottom: 16,
+              fontSize: 14,
+              color: "#334155",
+              fontWeight: 600,
+            }}
+          >
+            Itens respondidos: {totalRespondidos}/{totalItens}
+          </div>
+        ) : null}
+
+        {erro ? (
+          <div
+            style={{
+              background: "#fee2e2",
+              color: "#991b1b",
+              border: "1px solid #fecaca",
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 16,
+            }}
+          >
+            {erro}
+          </div>
+        ) : null}
+
+        {areas.map((area) => {
+          const aberta = areaAberta === area.area;
+          const status = getAreaStatus(area);
+
+          return (
             <div
+              key={area.area}
               style={{
                 background: "#fff",
                 borderRadius: 18,
-                padding: 24,
+                marginBottom: 16,
                 border: "1px solid #e5e7eb",
-                textAlign: "center",
+                overflow: "hidden",
               }}
             >
-              Carregando checklist...
-            </div>
-          ) : (
-            groupedSections.map((section) => (
-              <div
-                key={section.area}
+              <button
+                type="button"
+                onClick={() => toggleArea(area.area)}
                 style={{
-                  background: "#fff",
-                  borderRadius: 18,
-                  marginBottom: 16,
-                  border: "1px solid #e5e7eb",
-                  overflow: "hidden",
+                  width: "100%",
+                  border: "none",
+                  background: "#f8fafc",
+                  padding: 16,
+                  cursor: "pointer",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  textAlign: "left",
                 }}
               >
-                <div
-                  style={{
-                    padding: 16,
-                    background: "#f8fafc",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    fontWeight: 700,
-                  }}
-                >
-                  <span>{section.area}</span>
-                  <span style={{ color: "#64748b" }}>
-                    {section.done}/{section.total}
-                  </span>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 18 }}>{area.area}</div>
+                  <div style={{ marginTop: 6, fontSize: 13, color: "#64748b" }}>
+                    {area.itens.length} itens • {status}
+                  </div>
                 </div>
 
-                {section.items.map((item, index) => {
-                  const precisaFotoAgora = item.fotoObrigatoria || item.status === "NÃO";
-                  const fotoFeita = !!item.fotoBase64;
+                <div
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 700,
+                    color: "#475569",
+                  }}
+                >
+                  {aberta ? "−" : "+"}
+                </div>
+              </button>
 
-                  return (
-                    <div
-                      key={item.id}
-                      style={{
-                        padding: 16,
-                        borderTop: index === 0 ? "1px solid #e5e7eb" : "1px solid #e5e7eb",
-                      }}
-                    >
-                      <div style={{ fontWeight: 700, marginBottom: 8 }}>{item.item}</div>
+              {aberta && (
+                <div style={{ padding: 16 }}>
+                  {area.itens.map((item, index) => {
+                    const fotoObrigatoriaAgora = isFotoObrigatoriaAgora(item);
+                    const observacaoObrigatoria = isObservacaoObrigatoria(item);
+                    const chaveItem = `${area.area}__${item.item}`;
+                    const estaSalvando = salvandoChave === chaveItem;
 
-                      <div style={{ marginBottom: 12 }}>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            padding: "5px 10px",
-                            borderRadius: 999,
-                            fontSize: 12,
-                            fontWeight: 700,
-                            background: precisaFotoAgora ? "#fee2e2" : "#e0f2fe",
-                            color: precisaFotoAgora ? "#991b1b" : "#075985",
-                          }}
-                        >
-                          {getPhotoRequirementText(item)}
-                        </span>
-                      </div>
-
+                    return (
                       <div
+                        key={item.item}
                         style={{
-                          display: "flex",
-                          gap: 8,
-                          flexWrap: "wrap",
-                          marginBottom: 10,
+                          paddingBottom: 18,
+                          marginBottom: 18,
+                          borderBottom:
+                            index === area.itens.length - 1
+                              ? "none"
+                              : "1px solid #e5e7eb",
                         }}
                       >
-                        <button
-                          type="button"
-                          onClick={() => setStatus(item.id, "SIM")}
-                          style={{
-                            padding: "10px 14px",
-                            borderRadius: 12,
-                            border: "1px solid #d1d5db",
-                            background: item.status === "SIM" ? "#16a34a" : "#f8fafc",
-                            color: item.status === "SIM" ? "#fff" : "#111827",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Conforme
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setStatus(item.id, "NÃO")}
-                          style={{
-                            padding: "10px 14px",
-                            borderRadius: 12,
-                            border: "1px solid #d1d5db",
-                            background: item.status === "NÃO" ? "#d97706" : "#f8fafc",
-                            color: item.status === "NÃO" ? "#fff" : "#111827",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Não conforme
-                        </button>
-
-                        <label
-                          style={{
-                            padding: "10px 14px",
-                            borderRadius: 12,
-                            border: precisaFotoAgora && !fotoFeita
-                              ? "2px solid #dc2626"
-                              : "1px solid #d1d5db",
-                            background: fotoFeita ? "#dcfce7" : "#fff",
-                            color: "#111827",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                          }}
-                        >
-                          {fotoFeita ? "Foto anexada" : "Tirar foto"}
-                          <input
-                            hidden
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={(e) => handlePhoto(item.id, e.target.files?.[0])}
-                          />
-                        </label>
-                      </div>
-
-                      {item.status === "NÃO" && (
                         <div
                           style={{
+                            fontWeight: 800,
+                            fontSize: 20,
                             marginBottom: 8,
-                            color: "#b45309",
-                            fontSize: 14,
-                            fontWeight: 600,
                           }}
                         >
-                          Não conforme: descrição e foto obrigatórias
+                          {item.item}
                         </div>
-                      )}
 
-                      {item.fotoObrigatoria && (
+                        {fotoObrigatoriaAgora && (
+                          <div
+                            style={{
+                              display: "inline-block",
+                              background: "#fee2e2",
+                              color: "#b91c1c",
+                              borderRadius: 999,
+                              padding: "6px 10px",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              marginBottom: 12,
+                            }}
+                          >
+                            Foto obrigatória
+                          </div>
+                        )}
+
+                        {item.observacaoItem ? (
+                          <div style={{ marginBottom: 12 }}>
+                            <button
+                              type="button"
+                              onClick={() => toggleOrientacao(area.area, item.item)}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                padding: 0,
+                                color: "#334155",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {item.open ? "Ocultar orientação" : "Ver orientação"}
+                            </button>
+
+                            {item.open && (
+                              <div
+                                style={{
+                                  marginTop: 10,
+                                  background: "#f8fafc",
+                                  border: "1px solid #e2e8f0",
+                                  borderRadius: 12,
+                                  padding: 12,
+                                  color: "#334155",
+                                  lineHeight: 1.5,
+                                }}
+                              >
+                                {item.observacaoItem}
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+
                         <div
                           style={{
-                            marginBottom: 8,
-                            color: "#991b1b",
-                            fontSize: 14,
-                            fontWeight: 600,
+                            display: "flex",
+                            gap: 8,
+                            flexWrap: "wrap",
+                            marginBottom: 12,
                           }}
                         >
-                          Este item exige foto mesmo quando estiver conforme
+                          <button
+                            type="button"
+                            onClick={() => setStatus(area.area, item.item, "SIM")}
+                            style={{
+                              padding: "10px 14px",
+                              borderRadius: 12,
+                              border: "1px solid #d1d5db",
+                              background:
+                                item.resposta?.conforme === "SIM" ? "#16a34a" : "#f8fafc",
+                              color:
+                                item.resposta?.conforme === "SIM" ? "#fff" : "#111827",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Conforme
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setStatus(area.area, item.item, "NÃO")}
+                            style={{
+                              padding: "10px 14px",
+                              borderRadius: 12,
+                              border: "1px solid #d1d5db",
+                              background:
+                                item.resposta?.conforme === "NÃO" ? "#d97706" : "#f8fafc",
+                              color:
+                                item.resposta?.conforme === "NÃO" ? "#fff" : "#111827",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Não conforme
+                          </button>
+
+                          <label
+                            style={{
+                              padding: "10px 14px",
+                              borderRadius: 12,
+                              border: fotoObrigatoriaAgora
+                                ? "2px solid #dc2626"
+                                : "1px solid #cbd5e1",
+                              background: fotoObrigatoriaAgora ? "#fff1f2" : "#e5e7eb",
+                              color: fotoObrigatoriaAgora ? "#991b1b" : "#475569",
+                              fontWeight: 800,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                            }}
+                          >
+                            Tirar foto
+                            <input
+                              hidden
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              onChange={(e) =>
+                                handlePhoto(area.area, item.item, e.target.files?.[0])
+                              }
+                            />
+                          </label>
                         </div>
-                      )}
 
-                      <button
-                        type="button"
-                        onClick={() => updateItem(item.id, { open: !item.open })}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          padding: 0,
-                          color: "#475569",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          marginBottom: item.open ? 12 : 0,
-                        }}
-                      >
-                        {item.open ? "Ocultar detalhes" : "Adicionar observação"}
-                      </button>
+                        <div style={{ marginBottom: 12 }}>
+                          <label
+                            style={{
+                              display: "block",
+                              fontWeight: 700,
+                              marginBottom: 8,
+                              color: observacaoObrigatoria ? "#b91c1c" : "#334155",
+                            }}
+                          >
+                            {observacaoObrigatoria ? "Observação *" : "Observação"}
+                          </label>
 
-                      {item.open && (
-                        <div>
                           <textarea
-                            value={item.observacao}
+                            value={item.resposta?.observacao || ""}
                             onChange={(e) =>
-                              updateItem(item.id, { observacao: e.target.value })
+                              updateItem(area.area, item.item, {
+                                observacao: e.target.value,
+                              })
                             }
                             placeholder="Descreva o que foi observado"
                             style={{
                               width: "100%",
                               minHeight: 90,
                               borderRadius: 12,
-                              border: "1px solid #d1d5db",
+                              border: observacaoObrigatoria
+                                ? "2px solid #f59e0b"
+                                : "1px solid #d1d5db",
                               padding: 12,
                               boxSizing: "border-box",
                               resize: "vertical",
                             }}
                           />
-
-                          {item.fotoPreview ? (
-                            <img
-                              src={item.fotoPreview}
-                              alt={item.item}
-                              style={{
-                                width: "100%",
-                                marginTop: 12,
-                                borderRadius: 12,
-                                maxHeight: 240,
-                                objectFit: "cover",
-                                border: "1px solid #e5e7eb",
-                              }}
-                            />
-                          ) : (
-                            <div
-                              style={{
-                                marginTop: 12,
-                                height: 120,
-                                borderRadius: 12,
-                                border: "1px dashed #cbd5e1",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "#64748b",
-                                fontSize: 14,
-                              }}
-                            >
-                              Nenhuma foto anexada
-                            </div>
-                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))
-          )}
-        </div>
 
-        <div
-          style={{
-            position: "fixed",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(255,255,255,0.96)",
-            borderTop: "1px solid #e5e7eb",
-            padding: 12,
-          }}
-        >
-          <div style={{ maxWidth: 560, margin: "0 auto" }}>
-            <button
-              type="button"
-              onClick={enviar}
-              disabled={sending || loadingTemplate}
-              style={{
-                width: "100%",
-                minHeight: 54,
-                border: "none",
-                borderRadius: 16,
-                background: "#0f172a",
-                color: "#fff",
-                fontWeight: 700,
-                fontSize: 16,
-                cursor: "pointer",
-              }}
-            >
-              {sending ? "Enviando..." : "Enviar Checklist"}
-            </button>
-          </div>
-        </div>
+                        {item.resposta?.fotoPreview ? (
+                          <img
+                            src={item.resposta.fotoPreview}
+                            alt={item.item}
+                            style={{
+                              width: "100%",
+                              marginBottom: 12,
+                              borderRadius: 12,
+                              maxHeight: 240,
+                              objectFit: "cover",
+                              border: "1px solid #e5e7eb",
+                            }}
+                          />
+                        ) : null}
+
+                        <button
+                          type="button"
+                          onClick={() => salvarItem(area.area, item.item)}
+                          disabled={estaSalvando}
+                          style={{
+                            width: "100%",
+                            minHeight: 46,
+                            border: "none",
+                            borderRadius: 12,
+                            background: "#0f172a",
+                            color: "#fff",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {estaSalvando ? "Salvando..." : "Salvar item"}
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => salvarArea(area.area)}
+                    disabled={salvandoChave === area.area}
+                    style={{
+                      width: "100%",
+                      minHeight: 50,
+                      border: "1px solid #0f172a",
+                      borderRadius: 12,
+                      background: "#fff",
+                      color: "#0f172a",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {salvandoChave === area.area ? "Salvando..." : "Salvar área"}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
