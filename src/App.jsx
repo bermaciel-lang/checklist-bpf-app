@@ -539,19 +539,17 @@ if (!nomeResponsavel.trim()) {
   ))}
 </select>
 
-
-        </div>
-
-  {responsavelConfirmado ? (
+{loading ? (
   <div
     style={{
-      marginBottom: 12,
       fontSize: 14,
-      color: "#334155",
+      color: "#475569",
       fontWeight: 600,
+      marginTop: -4,
+      marginBottom: 4,
     }}
   >
-    Colaborador selecionado: {responsavelConfirmado}
+    Carregando checklist...
   </div>
 ) : null}
 
